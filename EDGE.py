@@ -58,9 +58,14 @@ class EDGE:
 
         checkpoint = None
         if checkpoint_path != "":
-            checkpoint = torch.load(
-                checkpoint_path, map_location=self.accelerator.device
-            )
+            # torch>=2.6 loads with weights_only=True; the checkpoint pickles
+            # EDGE's own normalizer classes, so allowlist just those.
+            from dataset.preprocess import Normalizer
+            from dataset.scaler import MinMaxScaler
+            with torch.serialization.safe_globals([Normalizer, MinMaxScaler]):
+                checkpoint = torch.load(
+                    checkpoint_path, map_location=self.accelerator.device
+                )
             self.normalizer = checkpoint["normalizer"]
 
         model = DanceDecoder(

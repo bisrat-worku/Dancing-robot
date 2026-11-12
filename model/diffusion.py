@@ -431,6 +431,22 @@ class GaussianDiffusion(nn.Module):
 
         return self.p_sample_loop(shape, cond, *args, **kwargs)
 
+    @torch.no_grad()
+    def smp_reward(self, x_clean, cond, w=1.0, fractions=(0.44, 0.30, 0.16)):
+        B, device = x_clean.shape[0], x_clean.device
+        reward = 0.0
+        for f in fractions:
+            t = int(self.n_timestep * f)
+            t_b = torch.full((B,), t, device=device, dtype=torch.long)
+            noise = torch.randn_like(x_clean)
+            x_t = self.q_sample(x_clean, t_b, noise=noise)           # noise the clip
+            pred_noise, x_start, *_ = self.model_predictions(
+                x_t, cond, t_b, weight=1.0, clip_x_start=False)      # same call as the sampler
+            err = ((pred_noise - noise) ** 2).mean(dim=(1, 2))       # (B,)
+            reward = reward + torch.exp(-w * err)
+        return reward / len(fractions)                               # (B,)
+
+
     # ------------------------------------------ training ------------------------------------------#
 
     def q_sample(self, x_start, t, noise=None):
@@ -619,6 +635,18 @@ class GaussianDiffusion(nn.Module):
                     full_pos[idx : idx + s] += pos_slice
                     idx += half
 
+                # stitch the predicted foot contacts the same way (linear cross-fade)
+                full_contact = None
+                if sample_contact is not None:
+                    c = sample_contact.to(pos.device).clone()
+                    c[:-1] *= fade_out
+                    c[1:] *= fade_in
+                    full_contact = torch.zeros((s + half * (b - 1), c.shape[-1])).to(pos.device)
+                    idx = 0
+                    for c_slice in c:
+                        full_contact[idx : idx + s] += c_slice
+                        idx += half
+
                 # stitch joint angles with slerp
                 slerp_weight = torch.linspace(0, 1, half)[None, :, None].to(pos.device)
 
@@ -646,6 +674,7 @@ class GaussianDiffusion(nn.Module):
             else:
                 full_pos = pos
                 full_q = q
+                full_contact = sample_contact[0] if sample_contact is not None else None
             full_pose = (
                 self.smpl.forward(full_q, full_pos).detach().cpu().numpy()
             )  # b, s, 24, 3
@@ -663,14 +692,16 @@ class GaussianDiffusion(nn.Module):
             if fk_out is not None:
                 outname = f'{epoch}_{"_".join(os.path.splitext(os.path.basename(name[0]))[0].split("_")[:-1])}.pkl'
                 Path(fk_out).mkdir(parents=True, exist_ok=True)
-                pickle.dump(
-                    {
-                        "smpl_poses": full_q.squeeze(0).reshape((-1, 72)).cpu().numpy(),
-                        "smpl_trans": full_pos.squeeze(0).cpu().numpy(),
-                        "full_pose": full_pose[0],
-                    },
-                    open(os.path.join(fk_out, outname), "wb"),
-                )
+                motion = {
+                    "smpl_poses": full_q.squeeze(0).reshape((-1, 72)).cpu().numpy(),
+                    "smpl_trans": full_pos.squeeze(0).cpu().numpy(),
+                    "full_pose": full_pose[0],
+                }
+                if full_contact is not None:
+                    # (T, 4) predicted contact for [l_ankle, r_ankle, l_toe, r_toe]
+                    # (joints 7, 8, 10, 11); EDGE treats > 0.95 as planted
+                    motion["contact"] = full_contact.cpu().numpy()
+                pickle.dump(motion, open(os.path.join(fk_out, outname), "wb"))
             return
 
         poses = self.smpl.forward(q, pos).detach().cpu().numpy()
