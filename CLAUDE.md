@@ -143,8 +143,8 @@ See policy_eval/README.md. Things already learned:
   CUDA 13 torch). Its CLIs are `.venv/bin/train`, `play`, `list-envs` (hyphen, not underscore).
 - `g1/edge_to_mjlab.py` (re-launches itself in mjlab's venv) turns `<song>_g1_fixed.pkl` into `<song>_mjlab.csv`
   and `<song>_mjlab_motion.npz`, the reference for `--env.commands.motion.motion-file`. It is mjlab's
-  `csv_to_npz.py` without the forced W&B upload (`--upload NAME` to opt in). It applies an 8 Hz low-pass by
-  default (peak joint speed 32 → 22 rad/s on funkorama). GMR's and mjlab's G1 have the same joint order
+  `csv_to_npz.py` without the forced W&B upload (`--upload NAME` to opt in). It applies a 12 Hz low-pass by
+  default (peak joint speed 32 → 28 rad/s on funkorama; 8 Hz gave 22). GMR's and mjlab's G1 have the same joint order
   and identical FK. mjlab's foot capsules sit at the floor for the fixed retarget (median +0.1 cm).
 - Logs and checkpoints go to `<run>/rl/g1_tracking/<timestamp>_<song>/`. mjlab's own default logger is
   wandb; the script passes tensorboard unless `--wandb`.

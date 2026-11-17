@@ -14,7 +14,7 @@
 # Options:
 #   --envs N          parallel environments (default 4096: ~1.9 GB VRAM, ~1.45 s per iteration on this GPU)
 #   --iters N         PPO iterations (default 10000; ~1 policy update each, checkpoint every 500)
-#   --smooth-hz F     low-pass cutoff for the reference, 0 = off (default 8). Changing it reconverts.
+#   --smooth-hz F     low-pass cutoff for the reference, 0 = off (default 12). Changing it reconverts.
 #   --no-state-est    train the policy without base position / linear velocity inputs (easier on hardware)
 #   --wandb           log to Weights & Biases (needs `wandb login`); default is TensorBoard in <run>/rl/
 #   --resume          continue from the newest checkpoint in <run>/rl/
@@ -33,7 +33,7 @@ MJ="$MJLAB_DIR/.venv/bin"
 
 [ $# -ge 1 ] || { sed -n 2,30p "$0"; exit 1; }
 INPUT="$1"; shift
-ENVS=4096; ITERS=10000; SMOOTH=8; TASK=Mjlab-Tracking-Flat-Unitree-G1; LOGGER=tensorboard
+ENVS=4096; ITERS=10000; SMOOTH=12; TASK=Mjlab-Tracking-Flat-Unitree-G1; LOGGER=tensorboard
 RESUME=0; RECONVERT=0; PLAY=0; VIDEO=0; CKPT=latest; GEN_ARGS=(); EXTRA=()
 while [ $# -gt 0 ]; do
   case "$1" in

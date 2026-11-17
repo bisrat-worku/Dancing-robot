@@ -121,7 +121,7 @@ def main():
   ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
   ap.add_argument("input", type=Path, help="outputs/<run>/ folder, or a *_g1*.pkl")
   ap.add_argument("--which", choices=["g1_fixed", "g1"], help="pick the input explicitly (default: g1_fixed, else g1)")
-  ap.add_argument("--smooth_hz", type=float, default=8.0, help="low-pass cutoff in Hz, 0 = off (default 8)")
+  ap.add_argument("--smooth_hz", type=float, default=12.0, help="low-pass cutoff in Hz, 0 = off (default 12)")
   ap.add_argument("--output_fps", type=float, default=50.0, help="mjlab policy rate (default 50)")
   ap.add_argument("-o", "--out", type=Path, help="output .npz (default <song>_mjlab_motion.npz)")
   ap.add_argument("--upload", metavar="NAME", help="also log to the W&B registry 'motions' as NAME")
