@@ -12,6 +12,13 @@ them to the Unitree G1 humanoid (via GMR).
 ./generate_dance.sh custom_music/funkorama.wav --seed 0 --guidance 4   # CFG weight (default 2 = stock EDGE)
 ```
 Every run writes `gen_info.json` (seed, guidance weight, window start slice, audio offset in s).
+`policy_eval/edge_bas.py <run dirs> --song_dir <folder with <song>.wav>` scores the beat alignment of raw EDGE motions.
+Guidance sweep on funkorama (w 0–4 × seeds 0–2, `outputs/guidance_sweep/`): BAS does not change with the weight, and w=0
+(music ignored) scores the same as w=2, so on this song the score doesn't detect the music conditioning.
+In distribution (10 AIST++ test songs in `custom_music/aistpp_test/`, 25 s, w 0–4 × seeds 0–2, `outputs/guidance_sweep_aist/`):
+BAS rises from w=0 to w≥2 (+0.02, paired Wilcoxon p≈0.01–0.09) and then plateaus, but stays only ~0.03 above chance.
+The real AIST++ dances (`--aist_gt`) are at chance too (+0.006), so the wrong-song test can't be passed by real dancers either.
+AIST++ data lives in `/mnt/c/Users/bwork/edge_data/edge_aistpp/{wavs,motions}` (60 fps, Y-up).
 
 Output goes to `outputs/<song>_<timestamp>/`:
 - `<song>.pkl`: raw EDGE motion. `smpl_poses` (T,72) axis-angle, `smpl_trans` (T,3),
@@ -114,6 +121,17 @@ If a run takes much longer, something is wrong. Check for a stray `wget` (see be
 - `test.py` uses every song folder in `--feature_cache_dir`. The script points it at a
   temp folder holding just the requested song.
 - Dance length needs `int(length/2.5)-1` five-second slices. The script caps the length to fit the song.
+
+## Evaluate a trained tracking policy (policy_eval/)
+`python3 policy_eval/evaluate.py outputs/<run>/` (about 1 h; `--no-second` skips pushes, friction and DTW; `--rescore`
+reuses `raw/`) writes `outputs/<run>/eval/<train-dir>/` with report.md, metrics.json, episodes.csv, plots and clean_run.mp4.
+See policy_eval/README.md. Things already learned:
+- mjlab's scene model prefixes names (`robot/left_knee_joint`), so a raw `mj_name2id` returns -1. rollout.py matches the suffix.
+- The motion command wraps at the clip end inside the same env.step, teleporting the robot. rollout.py clamps it instead.
+- Frame k of a recording is compared with reference frame k. mjlab's reset clips joint positions to the soft limits (0.9).
+- Funkorama motion frame 0 is 7.5 s into the wav (EDGE seed 0 picks window 3). It's measured from test_<song>.mp4's audio.
+- On funkorama the reference is not beat-aligned: its beat alignment score is at or below chance. So the wrong-song
+  self-test fails on it, while the synthetic positive control passes.
 
 ## Train a G1 tracking policy (mjlab)
 ```bash
