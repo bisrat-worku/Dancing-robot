@@ -69,7 +69,7 @@ fi
 
 # --- 2. features (cached per song) ---
 FEAT="cached_features/$SONG"
-n_wav=$(ls "$FEAT"/*.wav 2>/dev/null | wc -l); n_npy=$(ls "$FEAT"/*.npy 2>/dev/null | wc -l)
+n_wav=$( (ls "$FEAT"/*.wav 2>/dev/null || true) | wc -l); n_npy=$( (ls "$FEAT"/*.npy 2>/dev/null || true) | wc -l)
 if [ "$n_wav" -gt 0 ] && [ "$n_wav" -eq "$n_npy" ]; then
   echo "[2/4] using cached features $FEAT ($n_npy slices)"
 else
