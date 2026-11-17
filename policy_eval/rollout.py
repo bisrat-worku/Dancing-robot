@@ -265,19 +265,26 @@ def model_meta(env):
 
 
 def run_episode(env, env_w, policy, *, seed, apply_startup_dr, openloop=False, frames=None,
-                render_cb=None):
-  """Seed -> (startup DR) -> reset at frame 0 -> step until the first termination or clip end."""
+                render_cb=None, start_frame=0):
+  """Seed -> (startup DR) -> reset at frame 0 -> step until the first termination or clip end.
+  start_frame S > 0: after the reset the robot is put in the exact reference state of frame S with
+  mjlab's MotionCommand.reset_to_frame (no perturbation), and recorded frame k is scored against
+  reference frame S + k. Everything else (zero last action, observations) is as at a frame-0 start."""
   robot = env.scene["robot"]
   cmd = env.command_manager.get_term("motion")
   T = cmd.motion.time_step_total
-  n_steps = (T - 1) if frames is None else min(frames, T - 1)
+  n_steps = (T - 1 - start_frame) if frames is None else min(frames, T - 1 - start_frame)
   ids = torch.arange(env.num_envs, device=env.device)
   seed_rng(seed)
   if apply_startup_dr and "startup" in env.event_manager.available_modes:
     env.event_manager.apply(mode="startup", env_ids=ids)
   env.reset(env_ids=ids)
+  if start_frame:
+    cmd.reset_to_frame(ids, start_frame)  # time_steps = S, writes the reference state of frame S
+    env.sim.forward()
+    cmd._update_command()  # as env.reset does with compute(dt=0): pointer -> S + 1, relative poses
   obs = env_w.get_observations()
-  assert int(cmd.time_steps[0]) == 1, "after reset the command should point at frame 1"
+  assert int(cmd.time_steps[0]) == start_frame + 1, "after reset the command should point at frame S + 1"
 
   B, J = robot.num_bodies, robot.num_joints
   rec = {k: torch.full((n_steps + 1,) + s, float("nan"), device=env.device) for k, s in {
@@ -312,7 +319,7 @@ def run_episode(env, env_w, policy, *, seed, apply_startup_dr, openloop=False, f
 
   env.sim.step = sim_step_logged
   snap(0)
-  ref_frame[0] = 0
+  ref_frame[0] = start_frame
   if render_cb:
     render_cb(env)
   act_term = env.action_manager.get_term("joint_pos")
@@ -357,8 +364,9 @@ def run_episode(env, env_w, policy, *, seed, apply_startup_dr, openloop=False, f
                                                  if out["terminations"][first_term, i]]
   out["n_steps_clip"] = n_steps
   out["seed"] = seed
-  if not (out["ref_frame"] == np.arange(last + 1)).all():
-    raise RuntimeError("recorded frame k was not scored against reference frame k")
+  out["start_frame"] = start_frame
+  if not (out["ref_frame"] == start_frame + np.arange(last + 1)).all():
+    raise RuntimeError("recorded frame k was not scored against reference frame start_frame + k")
   return out
 
 
@@ -396,6 +404,7 @@ def main():
   ap.add_argument("--friction", default="0.3,0.6,1.2")
   ap.add_argument("--video", type=Path)
   ap.add_argument("--frames", type=int, help="stop after this many steps (debug)")
+  ap.add_argument("--start_frame", type=int, default=0, help="start the clip at this reference frame")
   a = ap.parse_args()
   ecfg = EvalConfig()
   run = a.run.resolve()
@@ -433,7 +442,8 @@ def main():
       seeds = parse_seeds(a.seeds) if a.mode in ("random", "push", "clean") else [0]
       for s in seeds:
         ep = run_episode(env, env_w, policy, seed=s, apply_startup_dr=a.mode in ("random", "push", "friction"),
-                         openloop=a.mode == "openloop", frames=a.frames, render_cb=render_cb)
+                         openloop=a.mode == "openloop", frames=a.frames, render_cb=render_cb,
+                         start_frame=a.start_frame)
         ep["checkpoint"] = "" if policy is None else str(ck)
         episodes.append(ep)
         extra["checkpoints"].append(ep["checkpoint"])

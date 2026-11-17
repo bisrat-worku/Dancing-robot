@@ -132,6 +132,12 @@ See policy_eval/README.md. Things already learned:
 - Funkorama motion frame 0 is 7.5 s into the wav (EDGE seed 0 picks window 3). It's measured from test_<song>.mp4's audio.
 - On funkorama the reference is not beat-aligned: its beat alignment score is at or below chance. So the wrong-song
   self-test fails on it, while the synthetic positive control passes.
+- `rollout.py --start_frame S` starts the clip at reference frame S (exact reference state, via mjlab's reset_to_frame).
+  `error_diagnostics.py` uses runs at 2, 5 and 10 s: from 1 s after the start the error equals the frame-0 run's at the same
+  reference time (r = 1.00), so the high leg error in 0–5 s is the motion, not a reset transient.
+- Funkorama error sources: leg error rises with limb joint speed (fastest 10 % of frames ≈ 1.5× the rest, r ≈ 0.3, error leads
+  speed by 60–100 ms); arms don't depend on speed. The 23.3 s arm spike (22 rad/s left shoulder roll) is GMR holding the
+  shoulder at its 129° limit and then catching up, not the 76 frames clipped in edge_to_mjlab.py (max 1.6° over the limit).
 
 ## Train a G1 tracking policy (mjlab)
 ```bash
