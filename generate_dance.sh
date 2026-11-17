@@ -8,6 +8,7 @@
 #   --length S    seconds of dance (default 30; capped to what the song allows)
 #   --seed N      fixes the random window and diffusion noise (default: random)
 #   --no_render   skip the stick-figure .mp4
+#   --guidance W  classifier-free guidance weight (default 2 = EDGE's stock value in EDGE.py; 0 = ignore music)
 #   --g1          also retarget to Unitree G1 with GMR (g1/edge_to_g1.py) and render a G1 video
 #   --out DIR     parent output folder (default outputs/)
 #
@@ -34,11 +35,12 @@ SHARDS="$JUKE_CACHE/prior_shards"
 
 [ $# -ge 1 ] || { sed -n 2,10p "$0"; exit 1; }
 WAV="$(readlink -f "$1")"; shift
-LENGTH=30; SEED=""; RENDER=1; G1=0; OUT_PARENT=outputs
+LENGTH=30; SEED=""; GUIDANCE=2; RENDER=1; G1=0; OUT_PARENT=outputs
 while [ $# -gt 0 ]; do
   case "$1" in
     --length) LENGTH="$2"; shift 2 ;;
     --seed) SEED="$2"; shift 2 ;;
+    --guidance) GUIDANCE="$2"; shift 2 ;;
     --no_render) RENDER=0; shift ;;
     --g1) G1=1; shift ;;
     --out) OUT_PARENT="$2"; shift 2 ;;
@@ -100,8 +102,23 @@ seed = "$SEED"
 if seed:
     import numpy, torch
     random.seed(int(seed)); numpy.random.seed(int(seed)); torch.manual_seed(int(seed))
+# guidance weight: EDGE.py hard-codes 2; set it on the diffusion object after construction
+import EDGE as _E
+_init = _E.EDGE.__init__
+def _patched(self, *a, **k):
+    _init(self, *a, **k)
+    self.diffusion.guidance_weight = float("$GUIDANCE")
+_E.EDGE.__init__ = _patched
+# record the random window test.py picks (first 2.5 s slice -> audio offset)
+_ri = random.randint; _picked = []
+random.randint = lambda a, b: (_picked.append(_ri(a, b)) or _picked[-1])
 sys.argv = ["test.py"] + sys.argv[1:]
 runpy.run_path("test.py", run_name="__main__")
+import json
+json.dump({"seed": seed or None, "guidance_weight": float("$GUIDANCE"), "length_s": float("$LENGTH"),
+           "window_start_slice": _picked[0], "audio_offset_s": _picked[0] * 2.5,
+           "sampler": "long_ddim_sample, 50 DDIM steps, weight ramp clip(linspace(0, 2w, 50), max w)"},
+          open("$OUT/gen_info.json", "w"), indent=1)
 EOF
 rm -rf "$TMP_FEAT"
 mv "$OUT/test_$SONG.pkl" "$OUT/$SONG.pkl"

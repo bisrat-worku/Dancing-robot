@@ -9,7 +9,9 @@ them to the Unitree G1 humanoid (via GMR).
 ./generate_dance.sh custom_music/funkorama.wav               # 30 s dance, ~1.5 min
 ./generate_dance.sh path/to/song.wav --length 20 --seed 3    # --no_render skips the .mp4
 ./generate_dance.sh custom_music/funkorama.wav --g1          # + retarget to Unitree G1, ~2.5 min total
+./generate_dance.sh custom_music/funkorama.wav --seed 0 --guidance 4   # CFG weight (default 2 = stock EDGE)
 ```
+Every run writes `gen_info.json` (seed, guidance weight, window start slice, audio offset in s).
 
 Output goes to `outputs/<song>_<timestamp>/`:
 - `<song>.pkl`: raw EDGE motion. `smpl_poses` (T,72) axis-angle, `smpl_trans` (T,3),
