@@ -16,6 +16,8 @@
 #   --iters N         PPO iterations (default 10000; ~1 policy update each, checkpoint every 500)
 #   --smooth-hz F     low-pass cutoff for the reference, 0 = off (default 12). Changing it reconverts.
 #   --no-state-est    train the policy without base position / linear velocity inputs (easier on hardware)
+#   --leg-constraint  train the constrained-RL variant Mjlab-Tracking-Flat-Unitree-G1-LegConstraint
+#                     (g1/leg_constraint.py: stock rewards + lambda * leg term, lambda learned per iteration)
 #   --wandb           log to Weights & Biases (needs `wandb login`); default is TensorBoard in <run>/rl/
 #   --resume          continue from the newest checkpoint in <run>/rl/
 #   --reconvert       rebuild the reference npz even if it exists
@@ -26,6 +28,7 @@
 #                     e.g. -- --agent.algorithm.learning-rate 5e-4 --env.rewards.motion-body-pos.weight 2.0
 set -euo pipefail
 cd "$(dirname "$(readlink -f "$0")")"
+EDGE_DIR="$PWD"
 
 MJLAB_DIR="${MJLAB_DIR:-/home/bwork/mjlab}"
 MJ="$MJLAB_DIR/.venv/bin"
@@ -34,13 +37,14 @@ MJ="$MJLAB_DIR/.venv/bin"
 [ $# -ge 1 ] || { sed -n 2,30p "$0"; exit 1; }
 INPUT="$1"; shift
 ENVS=4096; ITERS=10000; SMOOTH=12; TASK=Mjlab-Tracking-Flat-Unitree-G1; LOGGER=tensorboard
-RESUME=0; RECONVERT=0; PLAY=0; VIDEO=0; CKPT=latest; GEN_ARGS=(); EXTRA=()
+RESUME=0; RECONVERT=0; PLAY=0; VIDEO=0; CKPT=latest; GEN_ARGS=(); EXTRA=(); LEGC=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --envs) ENVS="$2"; shift 2 ;;
     --iters) ITERS="$2"; shift 2 ;;
     --smooth-hz) SMOOTH="$2"; RECONVERT=1; shift 2 ;;
     --no-state-est) TASK=Mjlab-Tracking-Flat-Unitree-G1-No-State-Estimation; shift ;;
+    --leg-constraint) LEGC=1; shift ;;
     --wandb) LOGGER=wandb; shift ;;
     --resume) RESUME=1; shift ;;
     --reconvert) RECONVERT=1; shift ;;
@@ -99,6 +103,7 @@ if [ "$PLAY" = 1 ]; then
 fi
 
 # 4b. train
+[ "$LEGC" = 1 ] && TASK=Mjlab-Tracking-Flat-Unitree-G1-LegConstraint
 echo "== [4/4] training $TASK on $SONG: $ENVS envs x $ITERS iterations, logger=$LOGGER"
 echo "   logs + checkpoints: $LOG_ROOT/g1_tracking/"
 [ "$LOGGER" = tensorboard ] && echo "   watch: $MJ/tensorboard --logdir $LOG_ROOT"
@@ -109,7 +114,11 @@ ARGS=(--env.commands.motion.motion-file "$NPZ"
       --agent.logger "$LOGGER"
       --log-root "$LOG_ROOT")
 [ "$RESUME" = 1 ] && ARGS+=(--agent.resume True)
-"$MJ/train" "$TASK" "${ARGS[@]}" "${EXTRA[@]}"
+if [ "$LEGC" = 1 ]; then  # same mjlab train CLI, with the variant registered and selected
+  "$MJ/python" "$EDGE_DIR/g1/train_leg_constraint.py" "${ARGS[@]}" "${EXTRA[@]}"
+else
+  "$MJ/train" "$TASK" "${ARGS[@]}" "${EXTRA[@]}"
+fi
 
 echo
 echo "done. watch it:  ./train_g1_tracking.sh $RUN --play"
