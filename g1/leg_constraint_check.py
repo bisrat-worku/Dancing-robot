@@ -13,6 +13,9 @@
       in PPO's rollout, no policy update. e_leg is accumulated by the variant's reward term itself at lambda = 0
       (the equal check shows that this env is the stock env). The all-body error from the same sums is compared
       with the logged Metrics/motion/error_body_pos as a check of the procedure.
+  python3 g1/leg_constraint_check.py shares --train_dir <stock dir> --checkpoint model_9999.pt --envs 512 --out F
+      the stock reward's composition at a checkpoint under the training sampling: each term's per-step value and
+      share of the total, and the motion_body_pos term's value at 3 and 5 cm of body-mean error.
 """
 
 import argparse
@@ -166,9 +169,75 @@ def eps(a):
   Path(a.out).write_text(json.dumps(res, indent=1))
 
 
+def shares(a):
+  """Stock reward at a checkpoint under the training sampling: each stock term's mean per-step value
+  (dt-scaled, as summed into the total) and its share of the mean total; plus the motion_body_pos term
+  against the body-mean error it actually sees. Runs the variant env at lambda = 0 (= stock, see equal)."""
+  env, env_w, runner = build(LC.TASK_ID, a.train_dir, a.envs, 42)
+  runner.load(str(a.checkpoint), map_location=DEVICE)
+  rm = env.reward_manager
+  names = [n for n in rm.active_terms if n != LC.TERM]
+  idx = [rm.active_terms.index(n) for n in names]
+  bp = rm.active_terms.index("motion_body_pos")
+  cmd = env.command_manager.get_term("motion")
+  actor = runner.alg.actor
+  actor.eval()
+  env_w.episode_length_buf = torch.randint_like(env_w.episode_length_buf, high=int(env_w.max_episode_length))
+  obs = env_w.get_observations().to(DEVICE)
+  sums, tot, n = torch.zeros(len(names), device=DEVICE), 0.0, 0
+  bp_val, bp_err, bp_rms = [], [], []
+  vcompute = rm.compute
+
+  def compute(dt):
+    out = vcompute(dt)
+    if record[0]:
+      nonlocal tot, n
+      sums.add_((rm._step_reward[:, idx] * rm._scale).sum(0))
+      tot += float(out.sum())
+      n += out.numel()
+      d = torch.norm(cmd.body_pos_relative_w - cmd.robot_body_pos_w, dim=-1)
+      bp_val.append(rm._step_reward[:, bp].cpu())
+      bp_err.append(d.mean(-1).cpu())
+      bp_rms.append(d.square().mean(-1).sqrt().cpu())
+    return out
+
+  record = [False]
+  rm.compute = compute
+  with torch.inference_mode():
+    for it in range(a.warmup + a.iters):
+      record[0] = it >= a.warmup
+      for _ in range(24):
+        obs, _, _, _ = env_w.step(actor(obs, stochastic_output=True))
+  mean = (sums / n).cpu().numpy()
+  total = tot / n
+  bv, be, br = torch.cat(bp_val).numpy(), torch.cat(bp_err).numpy(), torch.cat(bp_rms).numpy()
+  dt = env.step_dt
+  bins = {}
+  for c in (3.0, 5.0):
+    m = np.abs(100 * be - c) < 0.25
+    bins[f"{c:g}cm"] = {"frames": int(m.sum()), "term_raw_mean": float(bv[m].mean()),
+                        "rms_error_cm_mean": float(100 * br[m].mean())}
+  std = float(env.cfg.rewards["motion_body_pos"].params["std"])
+  w = float(env.cfg.rewards["motion_body_pos"].weight)
+  res = {"checkpoint": str(a.checkpoint), "envs": a.envs, "iterations": a.iters, "step_dt": dt,
+         "total_per_step": total,
+         "terms": {nm: {"weight": float(env.cfg.rewards[nm].weight), "per_step": float(v), "share": float(v / total)}
+                   for nm, v in zip(names, mean)},
+         "positive_terms_sum_per_step": float(mean[mean > 0].sum()),
+         "motion_body_pos": {
+           "std_m": std, "weight": w,
+           "analytic_uniform_error": {f"{c}cm": {"raw": float(np.exp(-(c / 100) ** 2 / std ** 2)),
+                                               "per_step": float(w * dt * np.exp(-(c / 100) ** 2 / std ** 2))}
+                                      for c in (3, 5)},
+           "measured_at_body_mean_error_within_0.25cm": bins,
+           "body_mean_error_cm_mean": float(100 * be.mean()), "term_raw_mean": float(bv.mean())}}
+  print(json.dumps(res, indent=1))
+  Path(a.out).write_text(json.dumps(res, indent=1))
+
+
 def main():
   ap = argparse.ArgumentParser()
-  ap.add_argument("mode", choices=["equal", "eps"])
+  ap.add_argument("mode", choices=["equal", "eps", "shares"])
   ap.add_argument("--train_dir", type=Path, required=True)
   ap.add_argument("--checkpoint", type=Path, required=True)
   ap.add_argument("--envs", type=int, default=1024)
@@ -178,7 +247,7 @@ def main():
   ap.add_argument("--out")
   ap.add_argument("--out_dir")
   a = ap.parse_args()
-  {"equal": equal, "eps": eps}[a.mode](a)
+  {"equal": equal, "eps": eps, "shares": shares}[a.mode](a)
 
 
 if __name__ == "__main__":
