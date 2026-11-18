@@ -9,7 +9,10 @@ Reward     every stock term unchanged, plus
                    Euclidean distance |body_pos_relative_w - robot_body_pos_w|, i.e. in the same frame as the
                    stock motion_body_pos term (reference re-anchored to the robot's root position and heading).
                    Mean of per-body distances, as mjlab's error_body_pos metric and policy_eval's group errors.
-           sigma   the stock motion_body_pos std (read from the stock config, 0.3 m)
+           sigma   sigma_leg = 0.06 m, the leg term's own width (SIGMA_LEG). The first run used the stock
+                   motion_body_pos std (0.3 m); at 4-5 cm that gives exp(.) ~ 0.97-0.98, a lambda-scaled alive
+                   bonus with almost no gradient on leg error, so it was stopped at iteration 11538
+                   (rl/g1_tracking/2026-11-18_23-59-29_funkorama/, kept).
            lambda = 0 makes the term exactly 0.0, so the total equals the stock reward bit for bit
            (checked by g1/leg_constraint_check.py equal).
 Multiplier once per PPO iteration, after the rollout and before the policy update:
@@ -62,6 +65,7 @@ STOCK_E_LEG_20K = 0.047189
 EPS = round(0.9 * STOCK_E_LEG_20K, 6)  # 0.04247 m
 EPS_SOURCE = ("computed from the stock checkpoint model_19998.pt under the training sampling "
               "(g1/leg_constraint_check.py eps); the training logs have no leg-group error")
+SIGMA_LEG = 0.06  # m
 EMA = 0.9
 STEP = 0.02
 LAMBDA_MAX = 2.0
@@ -124,10 +128,9 @@ def make_env_cfg(play: bool = False):
   if EPS is None:
     raise RuntimeError("leg_constraint.EPS is not set; measure it first: g1/leg_constraint_check.py eps")
   cfg = unitree_g1_flat_tracking_env_cfg(play=play)
-  stock = cfg.rewards["motion_body_pos"]
   cfg.rewards[TERM] = RewardTermCfg(
     func=leg_constraint_reward, weight=1.0,
-    params={"command_name": "motion", "std": float(stock.params["std"]), "body_names": LEG_BODIES,
+    params={"command_name": "motion", "std": SIGMA_LEG, "body_names": LEG_BODIES,
             "eps": float(EPS), "ema": EMA, "step": STEP, "lambda_max": LAMBDA_MAX})
   return cfg
 
