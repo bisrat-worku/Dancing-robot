@@ -47,7 +47,7 @@ import yaml  # noqa: E402
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import metrics as M  # noqa: E402
-from config import EvalConfig  # noqa: E402
+from config import EvalConfig, task_for  # noqa: E402
 
 EDGE_ROOT = HERE.parent
 EDGE_PY = EDGE_ROOT / ".venv" / "bin" / "python"
@@ -484,7 +484,8 @@ def all_training_runs(run: Path):
     ne = next((int(l.split(":")[1]) for l in envy.splitlines() if l.startswith("  num_envs:")), -1)
     rows.append({"dir": d.name, "seed": int(agent.get("seed", -1)), "max_iterations": mi, "num_envs": ne,
                  "checkpoints": [int(c.stem.split("_")[1]) for c in ck], "last_iteration": last,
-                 "complete": last is not None and last >= mi - 1})
+                 "complete": last is not None and last >= mi - 1,
+                 "task": task_for(d) if (d / "params" / "env.yaml").exists() else None})
   return rows
 
 
@@ -951,9 +952,11 @@ def main():
   train_dir = (a.train_dir.resolve() if a.train_dir else
                run / "rl" / "g1_tracking" / max(train_runs, key=lambda r: len(r["checkpoints"]))["dir"])
   this = next(r for r in train_runs if r["dir"] == train_dir.name)
-  for r in train_runs:  # a training seed = a finished run with the same budget as the evaluated one
+  cfg.task = this["task"]
+  for r in train_runs:  # a training seed = a finished run of the same task and budget with its own seed
     r["comparable"] = (r["complete"] and r["max_iterations"] == this["max_iterations"]
-                       and r["num_envs"] == this["num_envs"])
+                       and r["num_envs"] == this["num_envs"] and r["task"] == this["task"]
+                       and (r["seed"] != this["seed"] or r["dir"] == this["dir"]))
   complete = [r for r in train_runs if r["comparable"]]
   ckpts = sorted(train_dir.glob("model_*.pt"), key=lambda p: int(p.stem.split("_")[1]))
   ckpt = (a.checkpoint.resolve() if a.checkpoint else ckpts[-1])

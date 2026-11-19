@@ -156,3 +156,12 @@ See policy_eval/README.md. Things already learned:
   wandb; the script passes tensorboard unless `--wandb`.
 - Measured: 4096 envs = 1.9 GB VRAM and 1.45 s per iteration (1024 envs = 0.8 s per iteration). System
   RAM peaks at about 5–6 GB of 7, so close other heavy apps while training.
+
+## Leg-constraint variant (g1/leg_constraint.py)
+`./train_g1_tracking.sh outputs/<run>/ --leg-constraint ...` trains task `Mjlab-Tracking-Flat-Unitree-G1-LegConstraint`:
+the stock reward plus lambda * exp(-e_leg²/0.06²), with lambda learned once per iteration against eps = 4.247 cm (0.9 × the stock
+leg error at 20k). `g1/leg_constraint_check.py equal` checks that lambda = 0 gives the stock reward bit for bit. policy_eval
+detects the task from `params/env.yaml`. `policy_eval/compare_runs.py` compares two evals.
+- Result on funkorama (10k→20k, `eval/compare_leg_constraint/`): leg error −0.57 cm (4.33 → 3.77, randomized), torso −0.11,
+  arms +0.02, 100 % completion for both. Action rate +4 %, jerk +1 %. lambda peaked at 0.53 and ended at 0.10; it was never at the cap.
+- With sigma 0.3 (the stock width) the term is flat at 4–5 cm, so lambda ran to the cap (run 2026-11-18_23-59-29, stopped, kept).

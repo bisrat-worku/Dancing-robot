@@ -28,6 +28,7 @@ Output goes to `outputs/<run>/eval/<training-run>/`:
 | `evaluate.py` | mjlab | runs everything above, the self-tests, plots and the report |
 | `plot_error_vs_speed.py` | mjlab | per-body error over time against the reference's limb joint speed, plus scatters with correlation and lag |
 | `error_diagnostics.py` | mjlab | where the error comes from: speed (fastest 10 % vs rest), start time (needs `rollout.py --start_frame` runs), foot contact and slip, clipped frames and speed spikes |
+| `compare_runs.py` | mjlab | two evaluated runs side by side (clean, randomized, push), paired Wilcoxon tests on the shared seeds, per-group error against iteration, and the leg-constraint multiplier plot (λ, e_bar, eps) |
 | `edge_bas.py` | EDGE | beat alignment of raw EDGE motions (from `generate_dance.sh` runs) and of real AIST++ dances (`--aist_gt`), with chance and wrong-song controls |
 
 ## Rules this module keeps

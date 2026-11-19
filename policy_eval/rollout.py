@@ -53,7 +53,7 @@ import yaml  # noqa: E402
 from dataclasses import asdict  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from config import MOTOR_VELOCITY_LIMITS, EvalConfig  # noqa: E402
+from config import LEG_CONSTRAINT_TASK, MOTOR_VELOCITY_LIMITS, EvalConfig, task_for  # noqa: E402
 
 import mjlab.tasks  # noqa: E402,F401
 from mjlab.envs import ManagerBasedRlEnv  # noqa: E402
@@ -411,6 +411,10 @@ def main():
   train_dir = a.train_dir or max(find_training_run(run), key=lambda r: len(r[1]))[0]
   saved = saved_env_cfg(train_dir)
   motion_file = saved["commands"]["motion"]["motion_file"]
+  ecfg.task = task_for(train_dir)
+  if ecfg.task == LEG_CONSTRAINT_TASK:  # register the variant under the module name its env.yaml records
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "g1"))
+    import leg_constraint  # noqa: F401
 
   if a.mode == "verify":
     diffs = verify_training_cfg(ecfg.task, train_dir)

@@ -6,14 +6,27 @@ metrics.json and the report, so two runs are only compared when their configs ma
 
 from __future__ import annotations
 
+import re
 from dataclasses import asdict, dataclass, field
+
+
+STOCK_TASK = "Mjlab-Tracking-Flat-Unitree-G1"
+LEG_CONSTRAINT_TASK = "Mjlab-Tracking-Flat-Unitree-G1-LegConstraint"  # g1/leg_constraint.py
+
+
+def task_for(train_dir) -> str:
+  """The task a training run used, from its params/env.yaml: the leg-constraint variant adds the reward
+  term leg_constraint, everything else is the stock task."""
+  from pathlib import Path
+  txt = (Path(train_dir) / "params" / "env.yaml").read_text()
+  return LEG_CONSTRAINT_TASK if re.search(r"^  leg_constraint:$", txt, re.M) else STOCK_TASK
 
 
 @dataclass
 class EvalConfig:
   # ---- protocol -------------------------------------------------------------------------------
-  task: str = "Mjlab-Tracking-Flat-Unitree-G1"
-  """mjlab task id the policy was trained on (stock config, loaded from mjlab's registry and
+  task: str = STOCK_TASK
+  """mjlab task id the policy was trained on (set from the run by task_for; loaded from mjlab's registry and
   checked field by field against the run's params/env.yaml before anything runs)."""
   clean_repeats: int = 5
   """The clean run is rolled out this many times. MuJoCo Warp on the GPU is not bit-deterministic
