@@ -19,3 +19,5 @@ outputs/
 .venv/
 *.npz
 *.csv
+!results/**/*.gif
+!results/**/*.mp4

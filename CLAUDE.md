@@ -162,6 +162,6 @@ See policy_eval/README.md. Things already learned:
 the stock reward plus lambda * exp(-e_leg²/0.06²), with lambda learned once per iteration against eps = 4.247 cm (0.9 × the stock
 leg error at 20k). `g1/leg_constraint_check.py equal` checks that lambda = 0 gives the stock reward bit for bit. policy_eval
 detects the task from `params/env.yaml`. `policy_eval/compare_runs.py` compares two evals.
-- Result on funkorama (10k→20k, `eval/compare_leg_constraint/`): leg error −0.57 cm (4.33 → 3.77, randomized), torso −0.11,
+- Result on funkorama (10k→20k, `eval/compare_stock20k_vs_legc20k/`; eval folders are `stock_10k`, `stock_20k`, `leg_constraint_20k`): leg error −0.57 cm (4.33 → 3.77, randomized), torso −0.11,
   arms +0.02, 100 % completion for both. Action rate +4 %, jerk +1 %. lambda peaked at 0.53 and ended at 0.10; it was never at the cap.
 - With sigma 0.3 (the stock width) the term is flat at 4–5 cm, so lambda ran to the cap (run 2026-11-18_23-59-29, stopped, kept).
